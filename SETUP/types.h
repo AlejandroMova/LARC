@@ -12,6 +12,11 @@ namespace Types {
   struct IR {
     int pin;
   };
+  
+  struct UltraSonic {
+    int echo;
+    int trigger;
+  };
 
   struct Robot {
     Motor motor1;
@@ -19,6 +24,12 @@ namespace Types {
     IR leftIR;
     IR centerIR;
     IR rightIR;
+    UltraSonic leftUS;
+    UltraSonic centerUS;
+    UltraSonic rightUS;
+    ; 
+
+
   };
 
 }

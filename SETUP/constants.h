@@ -13,4 +13,13 @@ namespace CONSTANTS {
   const int leftIR = 8;
   const int centerIR = 9;
   const int rightIR = 10;
+
+  // ultrasonics
+  const int echoLeft = 11;
+  const int trigLeft = 12;
+  const int echoCenter = 13;
+  const int trigCenter = 14;
+  const int echoRight = 15;
+  const int trigRight = 16;
+
 } 
