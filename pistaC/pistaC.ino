@@ -2,33 +2,41 @@
 #include <types.h>
 #include <constants.h>
 
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+
 // utilizamos right hand rule
 
+// para este reto, necesitamos adafruit TCS34725 y adafruit MPU6050
 
-// inicializar robot 
+// inicializar robot
 Types::Robot robot = INIT::init_robot();
+
+// crear objeto mpu 6050
+Adafruit_MPU6050 mpu;
 
 // hace falta revisar tiempos y velocidad
 // tiempo y velocidad para girar
 int vGiro = 200;
-int tGiro = 0.5;
+int tGiro = 500;
 // tiempo y velocidad para cambiar de bloque
-int tBloque = 0.5;
+int tBloque = 500;
 int vBloque = 255;
 // tiempo y velocidad para dar 180
 int v180 = 200;
-int t180 = 1;
+int t180 = 1000;
 // tiempo scan
 int tScan = 10;
 
 
-
-// LOW si no hay obstaculo, HIGH si lo hay
-int distLeft = LOW;
-int distRight = LOW;
-int distCenter = LOW;
+// distancia en metros
+int distLeft = 0;
+int distRight = 0;
+int distCenter = 0;
 
 float useSensor(Types::UltraSonic us) {
+  // devuelve cms
   int trigger = us.trigger;
   int echo = us.echo;
   //aclaramos
@@ -45,14 +53,43 @@ float useSensor(Types::UltraSonic us) {
   return duration * 0.0343 / 2;
 }
 
+void giroGrad(char direccion, int grados) {
+  // inicializamos variables
+  float angulo_girado = 0;
+
+  if (direccion == 'D') {
+    //girar hacia la derecha
+    MOVIMIENTO::giraDerecha(robot, vGiro);
+  } else if (direccion == 'I') {
+    MOVIMIENTO::giraIzquierda(robot, vGiro);
+  }
+  unsigned long tiempoAnterior = micros();
+    // girar hasta que el angulo de giro sea 90
+    while (abs(angulo_girado) < grados) {
+      sensors_event_t a, g, temp;
+      mpu.getEvent(&a, &g, &temp);
+
+      // velocidad de giro en grados
+      float velocidad_giro = g.gyro.z * (180 / PI);
+
+      unsigned long tiempoActual = micros();
+      // diferencia de tiempo desde que empezo el loop hasta el final
+      long dif_tiempo = tiempoActual - tiempoAnterior;
+      // pasamos de microsegundos a segundos
+      float dif_tiempo_seg = dif_tiempo / 1000000.0;
+      // velocidad en angulos por segundo * el tiempo  en segundos
+      angulo_girado += velocidad_giro * dif_tiempo_seg;
+      unsigned long tiempoAnterior = tiempoActual;
+  }
+  MOVIMIENTO::frenar(robot);
+}
+
 void checkSurroundings() {
   // izquierda
   distLeft = useSensor(robot.leftUS);
   distRight = useSensor(robot.rightUS);
   distCenter = useSensor(robot.centerUS);
-
 }
-
 
 void setup() {
   // setup ines robot
@@ -73,36 +110,48 @@ void setup() {
   pinMode(robot.rightUS.echo, OUTPUT);
   pinMode(robot.rightUS.trigger, OUTPUT);
 
+
+  //init giroscopio
+  if (!mpu.begin()) {
+    Serial.println("No se encontro MPU 6050");
+    while (1) {
+      delay(10);
+    }
+  }
+
+  Serial.println("MPU6050 encontrado");
 }
 
 void loop() {
+  // variables del giroscopio
+  sensors_event_t a, g, temp;
+
+  // esta variable sera utilizada para medir el giro
+  float angulo_girar = 0;
+
+
   // RIGHT HAND RULE
-  
-  
   // revisamos entorno
   checkSurroundings();
 
   // si tenemos pared a la derecha y libre frente, seguimos frente
-  bool frente = distRight < 0.3 && distCenter > 0.5;
+  bool frente = distRight < 30 && distCenter > 50;
   // si no hay pared frente, pero no hay pared a la derecha, giramos hacia la derecha con la pared
-  bool giraDerecha = distRight > 0.5 && distCenter > 0.5;
+  bool giraDerecha = distRight > 50 && distCenter > 50;
   // si hay pared enfrente y a la derecha, giramos en 180
-  bool gira180 = distRight < 0.3 && distCenter < 0.3;
-  
+  bool gira180 = distRight < 30 && distCenter < 30;
+
   if (frente) {
-    MOVIMIENTO::moverFrente(robot,vBloque);
+    MOVIMIENTO::moverFrente(robot, vBloque);
     delay(tBloque);
   } else if (giraDerecha) {
     //giramos a la derecha y damos recto
     //derecha
-    MOVIMIENTO::giraDerecha(robot, vGiro);
-    delay(tGiro);
+    giroGrad('D', 90);
     //recto
     MOVIMIENTO::moverFrente(robot, vBloque);
     delay(tBloque);
   } else if (gira180) {
-    MOVIMIENTO::giraIzquierda(robot, v180);
-    delay(t180);
+    giroGrad('I', 180);
   }
-
 }
