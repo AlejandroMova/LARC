@@ -1,9 +1,11 @@
 #include <funciones.h>
 #include <constants.h>
 #include <types.h>
+#include <Adafruit_TCS34725.h>
 
-
+// inicializamos sensor RGB y robot
 Types::Robot robot = INIT::init_robot();
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
 
 // creamos variables para PID
 float Kp = 1.0; // proporcional
@@ -13,7 +15,7 @@ float Kd = 0.5; // derivada
 // velocidad base de los motores 
 int velocidadBase = 150;
 
-//variables para el calculo
+// variables para el calculo
 float error = 0;
 float P = 0;
 float I = 0;
@@ -21,7 +23,40 @@ float D = 0;
 float errorAnterior = 0;
 float correcionPID = 0;
 
+// nueva variable para estado de linea
+// true = linea negra sobre fondo blanco
+// false = linea blanca sobre fondo negro
+bool lineaEsNegra = true; 
+
+// colores 
+enum COLORES {
+  AMARILLO,
+  DESCONOCIDO
+};
+
+
+// funcion para detectar colores
+COLORES detectColor(Adafruit_TCS34725 tcs) {
+  uint16_t r, g, b, c;
+  tcs.getRawData(&r, &g, &b, &c);
+
+  // Evitar división por cero
+  float sum = r + g + b;
+  if (sum == 0) return DESCONOCIDO;
+
+  float R = r / sum;
+  float G = g / sum;
+  float B = b / sum;
+
+  // normalizamos valores basado en porcentaje
+  // estos valores pueden necesitar ajuste
+  if (R > 0.38 && G > 0.35 && B < 0.25) return AMARILLO;
+
+  return DESCONOCIDO;
+}
+
 void setup() {
+  Serial.begin(9600); // iniciamos monitor serial
 
   // setup pines robot
   pinMode(CONSTANTS::ENA, OUTPUT);
@@ -36,74 +71,111 @@ void setup() {
   pinMode(CONSTANTS::rightIR, INPUT);
   pinMode(CONSTANTS::leftIR, INPUT);
 
-  // hacemos que los motores vayan hacia adelante desde el setup
+  // iniciamos sensor de color
+  if (!tcs.begin()) {
+    Serial.println("No se encontro sensor TCS34725");
+    while (1); // parar si no hay sensor
+  }
+
+  // hacemos que los motores vayan hacia adelante
   MOVIMIENTO::moverFrente(robot, velocidadBase);
-
-
-  
 }
 
 void loop() {
-  // la logica del loop tiene que estar basado en PID
-  // leer sensores
+  
+  // crear checkpoint
+  // el checkpoint amarillo tiene prioridad
+  if (detectColor(tcs) == AMARILLO) {
+    MOVIMIENTO::frenar(robot); // frenamos
+    while (1); // paramos por completo
+    // no continuamos hasta reiniciar el robot
+  }
+
+  // leer infrarrojos
+  // asumimos 1 = ve linea negra, 0 = ve fondo blanco
   int stateLeft = digitalRead(robot.leftIR.pin);
   int stateCenter = digitalRead(robot.centerIR.pin);
   int stateRight = digitalRead(robot.rightIR.pin);
 
-  // calculamos el error
-  // convertimos las lecturas de los 3 sensores en un solo valor de error
-  // (0, 1, 0) error es igual a 0, porque esta centrado
-  // (0, 1, 1), error = 1 (desviado a la izq)
-  // (0, 0, 1), error = 2 (muy desviado a la izq)
-  // (1, 1, 0) error = -1 (desv derecha)
-  // (1, 0, 0) error = -2 (muy desv derecha)
-  // (0, 0, 0) perdimos la linea, entonces utilizamos el ultimo error
-  // (1, 1, 1) es una interseccion, tenemos que parar
-
-  if (stateLeft == LOW && stateCenter == HIGH && stateRight == LOW) {
-    error = 0; // Centrado
-  } else if (stateLeft == LOW && stateCenter == HIGH && stateRight == HIGH) {
-    error = 1;
-  } else if (stateLeft == LOW && stateCenter == LOW && stateRight == HIGH) {
-    error = 2;
-  } else if (stateLeft == HIGH && stateCenter == HIGH && stateRight == LOW) {
-    error = -1;
-  } else if (stateLeft == HIGH && stateCenter == LOW && stateRight == LOW) {
-    error = -2;
-  } else if (stateLeft == LOW && stateCenter == LOW && stateRight == LOW) {
-    // perdimos la linea
-    // tenemos que girar hacia la ultima direccion que conocemos, pero bruscamente (por eso 3)
-    if (errorAnterior > 0) {
-      error = 3; // estaba a la izquierda, tenemos que girar hacia la derecha
-    } else {
-      error = -3; // estaba a la derecha, entonces tenemos que girar hacia la izq
+  // calcular el error
+  
+  if (lineaEsNegra) {
+    // para linea negra
+    // 1 es linea, 0 es fondo
+    
+    if (stateLeft == LOW && stateCenter == HIGH && stateRight == LOW) {
+      error = 0; // Centrado (0 1 0)
+    } else if (stateLeft == LOW && stateCenter == HIGH && stateRight == HIGH) {
+      error = 1; // (0 1 1)
+    } else if (stateLeft == LOW && stateCenter == LOW && stateRight == HIGH) {
+      error = 2; // (0 0 1)
+    } else if (stateLeft == HIGH && stateCenter == HIGH && stateRight == LOW) {
+      error = -1; // (1 1 0)
+    } else if (stateLeft == HIGH && stateCenter == LOW && stateRight == LOW) {
+      error = -2; // (1 0 0)
+    } else if (stateLeft == LOW && stateCenter == LOW && stateRight == LOW) {
+      // perdimos la linea (0 0 0)
+      if (errorAnterior > 0) {
+        error = 3; 
+      } else {
+        error = -3;
+      }
+    } else if (stateLeft == HIGH && stateCenter == HIGH && stateRight == HIGH) {
+      // interseccion O punto de inversion (1 1 1)
+      MOVIMIENTO::frenar(robot);
+      lineaEsNegra = false; // invertimos el estado
+      errorAnterior = 0; // reseteamos PID
+      I = 0;
+      delay(100); // pausa corta
+      MOVIMIENTO::moverFrente(robot, velocidadBase); // seguimos
+      return; // salimos del loop
     }
-  } else if (stateLeft == HIGH && stateCenter == HIGH && stateRight == HIGH) {
-    // interseccion, stop
-    error = 0;
-    MOVIMIENTO::frenar(robot);
-    return; // Detiene los motores y sale del loop
+    
+  } else {
+    // para linea blanca
+    // 0 es linea, 1 es fondo
+    
+    if (stateLeft == HIGH && stateCenter == LOW && stateRight == HIGH) {
+      error = 0; // Centrado (1 0 1)
+    } else if (stateLeft == HIGH && stateCenter == LOW && stateRight == LOW) {
+      error = 1; // (1 0 0)
+    } else if (stateLeft == HIGH && stateCenter == HIGH && stateRight == LOW) {
+      error = 2; // (1 1 0)
+    } else if (stateLeft == LOW && stateCenter == LOW && stateRight == HIGH) {
+      error = -1; // (0 0 1)
+    } else if (stateLeft == LOW && stateCenter == HIGH && stateRight == HIGH) {
+      error = -2; // (0 1 1)
+    } else if (stateLeft == HIGH && stateCenter == HIGH && stateRight == HIGH) {
+      // perdimos la linea (1 1 1)
+      if (errorAnterior > 0) {
+        error = 3;
+      } else {
+        error = -3;
+      }
+    } else if (stateLeft == LOW && stateCenter == LOW && stateRight == LOW) {
+      // interseccion O punto de inversion (0 0 0)
+      MOVIMIENTO::frenar(robot);
+      lineaEsNegra = true; // volvemos a linea negra
+      errorAnterior = 0; // reseteamos PID
+      I = 0;
+      delay(100); // pausa corta
+      MOVIMIENTO::moverFrente(robot, velocidadBase); // seguimos
+      return; // salimos del loop
+    }
   }
 
-  // ahora calculamos error 
-  // error proporcional
+  // 4. CALCULAR CORRECCION PID
+  // esta parte es igual que antes
+  
   P = error;
-  // error integral (acumula)
   I = I + error;
-  // derivativo, reacciona a la razon de cambio del error
   D = error - errorAnterior;
-  // guardamos error para siguienteloop
   errorAnterior = error;
 
-  // calcular correcion total, multiplicando por constante de "afinacion"
   correcionPID = (Kp * P) + (Ki * I) + (Kd * D);
 
-  //aplicamos correcion a los motores
-  // positivo, esta a la izquierda
-  // girar derecha, motor izq rapido, motor derecho lento
-  // negativo, esta a la derecha
-  // girar izquierda, motor izquierdo lento, motor derecho rapido
-
+  // 5. APLICAR CORRECCION A MOTORES
+  
   int velocidadMotorIzquierdo = velocidadBase + correcionPID;
   int velocidadMotorDerecho = velocidadBase - correcionPID;
 
@@ -112,15 +184,10 @@ void loop() {
   velocidadMotorDerecho = constrain(velocidadMotorDerecho, 0, 255);
 
   // aplicamos esta velocidad a los motores
-  // motor izquierdo (considerando que motor1 es el izquierdo)
-  digitalWrite(robot.motor1.EN, velocidadMotorIzquierdo);
-  digitalWrite(robot.motor2.EN, velocidadMotorDerecho);
-
+  // IMPORTANTE: debe ser analogWrite para controlar velocidad (PWM)
+  analogWrite(robot.motor1.EN, velocidadMotorIzquierdo);
+  analogWrite(robot.motor2.EN, velocidadMotorDerecho);
   
-
-
-
-
-
-
+  // (asumimos que los pines IN1, IN2, IN3, IN4 ya estan
+  // configurados por MOVIMIENTO::moverFrente)
 }
