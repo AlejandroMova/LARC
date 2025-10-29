@@ -6,7 +6,7 @@
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include<Adafruit_TCS34725.h>
+#include <Adafruit_TCS34725.h> // la g es minuscula
 
 // utilizamos right hand rule
 
@@ -32,26 +32,53 @@ enum COLORES {
 };
 
 // funcion para detectar colores 
-COLORES detectColor(Adafruit_TCS34725 tcs) {
+// anadimos & para pasar por referencia, mas rapido
+COLORES detectColor(Adafruit_TCS34725 &tcs) {
   uint16_t r, g, b, c;
   tcs.getRawData(&r, &g, &b, &c);
 
   // Evitar división por cero
   float sum = r + g + b;
+  if (sum == 0) {
+    return DESCONOCIDO; // si no hay luz, no dividimos
+  }
 
   float R = r / sum;
   float G = g / sum;
   float B = b / sum;
 
   // normalizamos valores basado en porcentaje
+  // estos valores pueden necesitar ajuste
   if (R > 0.38 && G > 0.35 && B < 0.25) return AMARILLO;
   if (G > R + 0.05 && G > B + 0.05) return VERDE;
   if (B > R + 0.05 && B > G + 0.05) return AZUL;
-  if (R > 0.35 && B > 0.35 && G < 0.30) return ROJO;
+  if (R > 0.35 && B > 0.35 && G < 0.30) return ROJO; // esto parece mas magenta que rojo
 
   return DESCONOCIDO;
 }
 
+// nueva funcion para convertir enum a texto
+const char* colorToString(COLORES color) {
+  switch (color) {
+    case VERDE:    return "Verde";
+    case AMARILLO: return "Amarillo";
+    case ROJO:     return "Rojo";
+    case AZUL:     return "Azul";
+    default:       return "???";
+  }
+}
+
+// nueva funcion para escanear y mostrar
+void escanearYMostrarColor() {
+  COLORES colorDetectado = detectColor(tcs);
+  const char* textoColor = colorToString(colorDetectado);
+
+  // escribimos el color en la segunda fila
+  PANTALLA::write(0, 1, "Color:          "); // limpia la fila
+  PANTALLA::write(7, 1, textoColor);
+  
+  delay(500); // pausa chica para leer
+}
 
 
 // hace falta revisar tiempos y velocidad
@@ -100,22 +127,22 @@ void giroGrad(char direccion, int grados) {
     MOVIMIENTO::giraIzquierda(robot, vGiro);
   }
   unsigned long tiempoAnterior = micros();
-    // girar hasta que el angulo de giro sea 90
-    while (abs(angulo_girado) < grados) {
-      sensors_event_t a, g, temp;
-      mpu.getEvent(&a, &g, &temp);
+  // girar hasta que el angulo de giro sea 90
+  while (abs(angulo_girado) < grados) {
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
 
-      // velocidad de giro en grados
-      float velocidad_giro = g.gyro.z * (180 / PI);
+    // velocidad de giro en grados
+    float velocidad_giro = g.gyro.z * (180 / PI);
 
-      unsigned long tiempoActual = micros();
-      // diferencia de tiempo desde que empezo el loop hasta el final
-      long dif_tiempo = tiempoActual - tiempoAnterior;
-      // pasamos de microsegundos a segundos
-      float dif_tiempo_seg = dif_tiempo / 1000000.0;
-      // velocidad en angulos por segundo * el tiempo  en segundos
-      angulo_girado += velocidad_giro * dif_tiempo_seg;
-      unsigned long tiempoAnterior = tiempoActual;
+    unsigned long tiempoActual = micros();
+    // diferencia de tiempo desde que empezo el loop hasta el final
+    long dif_tiempo = tiempoActual - tiempoAnterior;
+    // pasamos de microsegundos a segundos
+    float dif_tiempo_seg = dif_tiempo / 1000000.0;
+    // velocidad en angulos por segundo * el tiempo  en segundos
+    angulo_girado += velocidad_giro * dif_tiempo_seg;
+    tiempoAnterior = tiempoActual; // corregido, estaba declarando una nueva variable
   }
   MOVIMIENTO::frenar(robot);
 }
@@ -137,27 +164,42 @@ void setup() {
   pinMode(CONSTANTS::IN4, OUTPUT);
 
   //setup ultrasonicos
-  pinMode(robot.leftUS.echo, OUTPUT);
+  // echo es input, trig es output
+  pinMode(robot.leftUS.echo, INPUT); // corregido
   pinMode(robot.leftUS.trigger, OUTPUT);
 
-  pinMode(robot.centerUS.echo, OUTPUT);
+  pinMode(robot.centerUS.echo, INPUT); // corregido
   pinMode(robot.centerUS.trigger, OUTPUT);
 
-  pinMode(robot.rightUS.echo, OUTPUT);
+  pinMode(robot.rightUS.echo, INPUT); // corregido
   pinMode(robot.rightUS.trigger, OUTPUT);
 
 
   // init pantalla
   PANTALLA::init(16, 2);
+  PANTALLA::write(0, 0, "Iniciando...");
+
   //init giroscopio
   if (!mpu.begin()) {
     Serial.println("No se encontro MPU 6050");
+    PANTALLA::write(0, 1, "Error MPU");
     while (1) {
       delay(10);
     }
   }
-
   Serial.println("MPU6050 encontrado");
+
+  // init sensor de color
+  if (tcs.begin()) {
+    Serial.println("Sensor TCS34725 encontrado");
+  } else {
+    Serial.println("No se encontro TCS34725");
+    PANTALLA::write(0, 1, "Error TCS");
+    while (1); // se congela si no lo encuentra
+  }
+
+  PANTALLA::write(0, 0, "Robot Listo");
+  delay(500);
 }
 
 void loop() {
@@ -172,6 +214,11 @@ void loop() {
   // revisamos entorno
   checkSurroundings();
 
+  // mostramos distancia en pantalla
+  String distStr = "C:" + String(distCenter) + " D:" + String(distRight);
+  PANTALLA::write(0, 0, "                "); // limpia fila
+  PANTALLA::write(0, 0, distStr.c_str());
+
   // si tenemos pared a la derecha y libre frente, seguimos frente
   bool frente = distRight < 30 && distCenter > 50;
   // si no hay pared frente, pero no hay pared a la derecha, giramos hacia la derecha con la pared
@@ -182,6 +229,8 @@ void loop() {
   if (frente) {
     MOVIMIENTO::moverFrente(robot, vBloque);
     delay(tBloque);
+    // movimos un bloque, revisamos color
+    escanearYMostrarColor();
   } else if (giraDerecha) {
     //giramos a la derecha y damos recto
     //derecha
@@ -189,7 +238,14 @@ void loop() {
     //recto
     MOVIMIENTO::moverFrente(robot, vBloque);
     delay(tBloque);
+    // movimos un bloque, revisamos color
+    escanearYMostrarColor();
   } else if (gira180) {
     giroGrad('I', 180);
+    // no nos movimos de bloque, solo giramos
+    // asi que no escaneamos color
+  } else {
+    // caso por defecto, si nos atoramos
+    MOVIMIENTO::frenar(robot);
   }
 }
