@@ -2,6 +2,7 @@
 
 #include "types.h"
 #include "constants.h"
+#include <Arduino.h>
 
 namespace INIT {
   // inicializar los motores
@@ -33,4 +34,13 @@ namespace MOVIMIENTO {
 
 namespace SENSORES {
   void trigUltraSonicos(Types::UltraSonic &left, Types::UltraSonic &center, Types::UltraSonic &right);
+}
+
+namespace PANTALLA {
+  
+void init(byte cols, byte rows);
+
+void write(int col, int row, const char* message);
+ 
+void clear();
 }

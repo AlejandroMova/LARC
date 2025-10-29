@@ -22,4 +22,7 @@ namespace CONSTANTS {
   const int echoRight = 15;
   const int trigRight = 16;
 
+  //pantalla (se requiere libreria LiquidCrystal_I2C)
+  
+
 } 
