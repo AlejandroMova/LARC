@@ -5,6 +5,8 @@
 #include <Adafruit_MPU6050.h>
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include<Adafruit_TCS34725.h>
 
 // utilizamos right hand rule
 
@@ -16,10 +18,45 @@ Types::Robot robot = INIT::init_robot();
 // crear objeto mpu 6050
 Adafruit_MPU6050 mpu;
 
+// inicializar deteccion de colores 
+Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
+
+// enum para colores
+enum COLORES {
+  VERDE,
+  AMARILLO,
+  ROJO,
+  AZUL,
+  DESCONOCIDO
+
+};
+
+// funcion para detectar colores 
+COLORES detectColor(Adafruit_TCS34725 tcs) {
+  uint16_t r, g, b, c;
+  tcs.getRawData(&r, &g, &b, &c);
+
+  // Evitar división por cero
+  float sum = r + g + b;
+
+  float R = r / sum;
+  float G = g / sum;
+  float B = b / sum;
+
+  // normalizamos valores basado en porcentaje
+  if (R > 0.38 && G > 0.35 && B < 0.25) return AMARILLO;
+  if (G > R + 0.05 && G > B + 0.05) return VERDE;
+  if (B > R + 0.05 && B > G + 0.05) return AZUL;
+  if (R > 0.35 && B > 0.35 && G < 0.30) return ROJO;
+
+  return DESCONOCIDO;
+}
+
+
+
 // hace falta revisar tiempos y velocidad
 // tiempo y velocidad para girar
 int vGiro = 200;
-int tGiro = 500;
 // tiempo y velocidad para cambiar de bloque
 int tBloque = 500;
 int vBloque = 255;
@@ -28,7 +65,6 @@ int v180 = 200;
 int t180 = 1000;
 // tiempo scan
 int tScan = 10;
-
 
 // distancia en metros
 int distLeft = 0;
@@ -111,6 +147,8 @@ void setup() {
   pinMode(robot.rightUS.trigger, OUTPUT);
 
 
+  // init pantalla
+  PANTALLA::init(16, 2);
   //init giroscopio
   if (!mpu.begin()) {
     Serial.println("No se encontro MPU 6050");
