@@ -6,7 +6,13 @@ namespace Types {
     int EN;
     int IN1;
     int IN2;
+
+    // pines para encoders
+    int pinEncoderA; // pin de interrupcion (CLK)
+    int pinEncoderB; // pin de direccion (DT)
     
+    // contador de pulsos (volatil porque se usa en interrupciones)
+    volatile long ticks; 
   };
 
   struct IR {
@@ -19,17 +25,14 @@ namespace Types {
   };
 
   struct Robot {
-    Motor motor1;
-    Motor motor2;
+    Motor motor1; // motor izquierdo
+    Motor motor2; // motor derecho
     IR leftIR;
     IR centerIR;
     IR rightIR;
     UltraSonic leftUS;
     UltraSonic centerUS;
     UltraSonic rightUS;
-  
-
-
   };
 
 }
