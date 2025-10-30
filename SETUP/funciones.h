@@ -28,7 +28,10 @@ namespace MOVIMIENTO {
   // gira izquierda
   void giraIzquierda(Types::Robot, int velocidad);
 
+  void avanzarDistancia(Types::Robot& robot, int velocidad, int ticks_objetivo);
+
   void frenar(Types::Robot);
+
 
 }
 
