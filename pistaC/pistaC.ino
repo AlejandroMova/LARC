@@ -6,7 +6,7 @@
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <Adafruit_TCS34725.h> // la g es minuscula
+#include <Adafruit_TCS34725.h> 
 
 // utilizamos right hand rule
 
@@ -227,7 +227,17 @@ void loop() {
   bool gira180 = distRight < 30 && distCenter < 30;
 
   if (frente) {
-    MOVIMIENTO::moverFrente(robot, vBloque);
+    // CAMBIAR PARA ENCODERS
+    //diametro 6.6 cm 
+    // gear ratio 1:19.2
+    // 11 ppr (pulsos por rev)
+    // entonces 19.2 * 11 dan igual a 211 pulsos por vuelta de la rueda
+    // circumferencia es igual a 6.6 * 3.14 = 20.7 cm por vuelta
+    // por lo tanto, para calcular el movimiento de 15cm, 
+    // 15 / 20.7 = 0.74 de la vuelta 
+    // por lo tanto 211 * 0.74 = 156 pulsos para llegar a 15 cm 
+    // MOVIMIENTO::moverFrente(robot, vBloque);
+    MOVIMIENTO::avanzarDistancia(robot, 180, 156);
     delay(tBloque);
     // movimos un bloque, revisamos color
     escanearYMostrarColor();
@@ -236,7 +246,10 @@ void loop() {
     //derecha
     giroGrad('D', 90);
     //recto
-    MOVIMIENTO::moverFrente(robot, vBloque);
+    // CAMBIAR PARA ENCODERS
+    //MOVIMIENTO::moverFrente(robot, vBloque);
+    MOVIMIENTO::avanzarDistancia(robot, 180, 156);
+
     delay(tBloque);
     // movimos un bloque, revisamos color
     escanearYMostrarColor();
