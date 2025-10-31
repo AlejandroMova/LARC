@@ -15,22 +15,22 @@ namespace INIT {
   Types::Robot init_robot();
 
   // inicializar ultrasonico
-  Types::UltraSonic init_ultrasonic();
+  Types::UltraSonic init_ultrasonic(int echo, int trig);
 
 }
 
 namespace MOVIMIENTO {
   // considerando que motor1 es IZQUIERDA
   // mover frente 
-  void moverFrente(Types::Robot, int velocidad);
+  void moverFrente(Types::Robot& robot, int velocidad);
   // gira derecha
-  void giraDerecha(Types::Robot, int velocidad);
+  void giraDerecha(Types::Robot& robot, int velocidad);
   // gira izquierda
-  void giraIzquierda(Types::Robot, int velocidad);
+  void giraIzquierda(Types::Robot& robot, int velocidad);
 
   void avanzarDistancia(Types::Robot& robot, int velocidad, int ticks_objetivo);
 
-  void frenar(Types::Robot);
+  void frenar(Types::Robot& robot);
 
 
 }

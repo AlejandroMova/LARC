@@ -74,7 +74,7 @@ Types::Robot init_robot() {
 
 namespace MOVIMIENTO {
 // mover frente
-void moverFrente(Types::Robot robot, int velocidad) {
+void moverFrente(Types::Robot& robot, int velocidad) {
   // ambos motores hacia frente
   // motor izquierdo
   analogWrite(robot.motor1.EN, velocidad);
@@ -86,7 +86,7 @@ void moverFrente(Types::Robot robot, int velocidad) {
   digitalWrite(robot.motor2.IN2, LOW);
 }
 // gira derecha
-void giraDerecha(Types::Robot robot, int velocidad) {
+void giraDerecha(Types::Robot& robot, int velocidad) {
   // motor izquierdo atras, derecho frente
   // motor izquierdo
   analogWrite(robot.motor1.EN, velocidad);
@@ -99,7 +99,7 @@ void giraDerecha(Types::Robot robot, int velocidad) {
 }
 
 // gira izquierda
-void giraIzquierda(Types::Robot robot, int velocidad) {
+void giraIzquierda(Types::Robot& robot, int velocidad) {
   // motor derecho atras, izquierdo frente
   // motor izquierdo
   analogWrite(robot.motor1.EN, velocidad);
@@ -112,7 +112,7 @@ void giraIzquierda(Types::Robot robot, int velocidad) {
 }
 
 
-void frenar(Types::Robot robot) {
+void frenar(Types::Robot& robot) {
   analogWrite(robot.motor1.EN, 0);
   analogWrite(robot.motor2.EN, 0);
 }
@@ -220,9 +220,8 @@ void setupInterrupciones(Types::Robot& robot) {
 
   // configura las interrupciones
   // digitalPinToInterrupt() convierte el numero de pin (ej. 2) al numero de interrupcion (ej. 0)
-  // se activa en CADA cambio (CHANGE)
-  attachInterrupt(digitalPinToInterrupt(robot.motor1.pinEncoderA), isr_motor1, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(robot.motor2.pinEncoderA), isr_motor2, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(robot.motor1.pinEncoderA), isr_motor1, RISING);
+  attachInterrupt(digitalPinToInterrupt(robot.motor2.pinEncoderA), isr_motor2, RISING);
 }
 
 void resetTicks(Types::Robot& robot) {
